@@ -93,7 +93,6 @@
             margin-top: 5px;
         }
         .copy-btn:hover { background-color: #218838; }
-
         #toast {
             visibility: hidden;
             min-width: 250px;
@@ -140,14 +139,12 @@
     </div>
     
     <button onclick="generateAndDownload()">Generate HTML Statis</button>
-
     <div id="rec-box" class="recommendation-box">
         <label for="share-preview">Konten Siap Share (Copy & Paste):</label>
         <textarea id="share-preview" readonly></textarea>
         <button class="copy-btn" onclick="copyPreview()">Copy Konten & Link</button>
     </div>
 </div>
-
 <div id="toast">Notifikasi</div>
 
 <script>
@@ -306,7 +303,6 @@ function generateAndDownload() {
     <header>
         <div class="container">
             <a href="index.html" class="logo-link"><div class="logo">USA News</div></a>
-            <nav><ul><li><a href="index.html">Home</a></li></ul></nav>
         </div>
     </header>
     <center>${tagScript}https://seribudollarperhari.github.io/banner/ad2.js${tagClose}</center>
@@ -376,37 +372,47 @@ function generateAndDownload() {
             const defaultTitle = "${safeTitleForScript}";
             
             if(container) {
-                fetch('keyword.txt')
-                    .then(response => response.text())
-                    .then(data => {
-                        let keywords = data.split('\\n').map(k => k.trim()).filter(k => k.length > 0);
-                        
-                        if(keywords.length > 0) {
-                            for (let i = keywords.length - 1; i > 0; i--) {
-                                const j = Math.floor(Math.random() * (i + 1));
-                                [keywords[i], keywords[j]] = [keywords[j], keywords[i]];
-                            }
-                            keywords = keywords.slice(0, 6);
-                            renderRelatedGrid(keywords);
-                        } else {
-                            throw new Error("File keyword kosong");
-                        }
-                    })
-                    .catch(err => {
-                        const fallbackKeywords = [
+                // Fetch keyword dan link secara bersamaan
+                Promise.all([
+                    fetch('keyword.txt').then(r => r.ok ? r.text() : '').catch(() => ''),
+                    fetch('https://seribudollarperhari.github.io/banner/link.txt').then(r => r.ok ? r.text() : '').catch(() => '')
+                ]).then(([kwData, linkData]) => {
+                    let keywords = kwData.split('\\n').map(k => k.trim()).filter(k => k.length > 0);
+                    let targetLinks = linkData.split('\\n').map(l => l.trim()).filter(l => l.length > 0);
+                    
+                    if(keywords.length === 0) {
+                        keywords = [
                             defaultTitle + " viral video",
                             defaultTitle + " latest update",
                             defaultTitle + " today",
                             defaultTitle + " breaking news"
                         ];
-                        renderRelatedGrid(fallbackKeywords);
-                    });
+                    } else {
+                        // Acak urutan array keyword
+                        for (let i = keywords.length - 1; i > 0; i--) {
+                            const j = Math.floor(Math.random() * (i + 1));
+                            [keywords[i], keywords[j]] = [keywords[j], keywords[i]];
+                        }
+                    }
+                    keywords = keywords.slice(0, 6);
+                    renderRelatedGrid(keywords, targetLinks);
+                });
             }
-            function renderRelatedGrid(keywords) {
+            
+            function renderRelatedGrid(keywords, targetLinks) {
                 let html = '';
-                keywords.forEach(term => {
+                keywords.forEach((term, index) => {
                     const clean = term.replace(/\\s/g, '-').toLowerCase();
-                    const linkUrl = 'index.html?q=' + encodeURIComponent(clean);
+                    
+                    // Default link bawaan AGC
+                    let linkUrl = 'index.html?q=' + encodeURIComponent(clean);
+                    
+                    // Timpa dengan link custom target jika file link.txt berhasil dibaca
+                    if (targetLinks && targetLinks.length > 0) {
+                        // Rotasi link berdasarkan index agar rata
+                        linkUrl = targetLinks[index % targetLinks.length];
+                    }
+                    
                     const qImg = term + " breaking news";
                     const imgUrl = 'https://tse1.mm.bing.net/th?q=' + encodeURIComponent(qImg) + '&w=400&h=250&c=7&rs=1&p=0&dpr=1.5&pid=1.7';
                     
@@ -416,7 +422,8 @@ function generateAndDownload() {
                     const termCap = term.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
                     const rTitle = rHook + ' ' + termCap + ' ' + rSuffix;
                     
-                    html += '<article class="content-card"><a href="' + linkUrl + '"><img src="' + imgUrl + '" alt="' + rTitle + '" loading="lazy"><div class="content-card-body"><h3>' + rTitle + '</h3></div></a></article>';
+                    // Link membuka tab baru karena menuju ke URL eksternal
+                    html += '<article class="content-card"><a href="' + linkUrl + '" target="_blank"><img src="' + imgUrl + '" alt="' + rTitle + '" loading="lazy"><div class="content-card-body"><h3>' + rTitle + '</h3></div></a></article>';
                 });
                 container.innerHTML = html;
             }
