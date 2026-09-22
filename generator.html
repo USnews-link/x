@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>USA News - Static Content Generator Tool</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;600;700&display=swap');
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f6f8;
+            color: #333;
+            padding: 40px 20px;
+        }
+        .wrapper {
+            max-width: 800px;
+            margin: 0 auto;
+            background: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            border-top: 5px solid #d32f2f;
+        }
+        h2 {
+            color: #d32f2f;
+            margin-bottom: 20px;
+            font-size: 1.8rem;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+            text-align: center;
+        }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; font-weight: 700; margin-bottom: 8px; color: #111; }
+        input[type="text"], textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-family: inherit;
+        }
+        textarea { height: 250px; resize: vertical; }
+        .note { font-size: 0.85rem; color: #666; margin-top: 5px; font-style: italic; }
+        
+        .settings-box {
+            background-color: #e9ecef;
+            padding: 20px;
+            border-radius: 6px;
+            border-left: 4px solid #17a2b8;
+            margin-bottom: 25px;
+        }
+        .settings-box h3 {
+            font-size: 1.1rem;
+            margin-bottom: 10px;
+            color: #0c5460;
+        }
+        
+        .recommendation-box {
+            margin-top: 15px;
+            padding: 15px;
+            background-color: #fce4e4;
+            border-left: 4px solid #d32f2f;
+            border-radius: 4px;
+            font-size: 0.95rem;
+            display: none; 
+            transition: all 0.3s ease;
+        }
+        .recommendation-box textarea {
+            height: 100px;
+            background-color: #fff;
+            margin-bottom: 10px;
+            resize: none;
+        }
+        
+        button {
+            width: 100%;
+            background-color: #d32f2f;
+            color: white;
+            border: none;
+            padding: 15px;
+            font-size: 1.1rem;
+            font-weight: 700;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+        button:hover { background-color: #b71c1c; }
+        
+        .copy-btn {
+            background-color: #28a745;
+            margin-top: 5px;
+        }
+        .copy-btn:hover { background-color: #218838; }
+
+        #toast {
+            visibility: hidden;
+            min-width: 250px;
+            background-color: #333;
+            color: #fff;
+            text-align: center;
+            border-radius: 4px;
+            padding: 16px;
+            position: fixed;
+            z-index: 1000;
+            left: 50%;
+            bottom: 30px;
+            transform: translateX(-50%);
+            font-size: 1rem;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            transition: visibility 0.3s, bottom 0.3s;
+        }
+        #toast.show {
+            visibility: visible;
+            bottom: 50px;
+        }
+    </style>
+</head>
+<body>
+<div class="wrapper">
+    <h2>USA News Content Generator</h2>
+    
+    <div class="settings-box">
+        <h3>Pengaturan In-App Redirect</h3>
+        <label for="redirect-url">Target Link Custom (Bisa ganti link monetisasi):</label>
+        <input type="text" id="redirect-url" placeholder="Opsional: https://link-monetisasi-anda.com/..." autocomplete="off">
+        <div class="note"><strong>Otomatis tersimpan.</strong> Jika dikosongkan, tombol 'Continue' akan mengarahkan user ke <strong>Link Artikel</strong> ini sendiri.</div>
+    </div>
+    
+    <div class="form-group">
+        <label for="thumbnail">Link Gambar Thumbnail:</label>
+        <input type="text" id="thumbnail" placeholder="Contoh: https://domain.com/gambar-viral.jpg" autocomplete="off">
+        <div class="note">Masukkan URL gambar secara langsung.</div>
+    </div>
+    
+    <div class="form-group">
+        <label for="content">Isi Berita:</label>
+        <textarea id="content" placeholder="Baris Paling Atas Pasti Judul Berita (H1)&#10;&#10;Paragraf Pertama ditulis di sini...&#10;&#10;Paragraf Kedua ditulis di sini..."></textarea>
+    </div>
+    
+    <button onclick="generateAndDownload()">Generate HTML Statis</button>
+
+    <div id="rec-box" class="recommendation-box">
+        <label for="share-preview">Konten Siap Share (Copy & Paste):</label>
+        <textarea id="share-preview" readonly></textarea>
+        <button class="copy-btn" onclick="copyPreview()">Copy Konten & Link</button>
+    </div>
+</div>
+
+<div id="toast">Notifikasi</div>
+
+<script>
+let baseDomain = "https://nicenews.github.io/"; 
+let currentRandomCode = ""; 
+
+function showToast(message, isSuccess = true, duration = 3000) {
+    const toast = document.getElementById("toast");
+    toast.textContent = message;
+    toast.style.backgroundColor = isSuccess ? "#28a745" : "#d32f2f"; 
+    toast.className = "show";
+    setTimeout(() => { 
+        toast.className = toast.className.replace("show", ""); 
+    }, duration);
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    const redirectInput = document.getElementById("redirect-url");
+    const savedRedirectUrl = localStorage.getItem("customRedirectUrl");
+    
+    if (savedRedirectUrl) {
+        redirectInput.value = savedRedirectUrl;
+    }
+    redirectInput.addEventListener("input", function() {
+        localStorage.setItem("customRedirectUrl", this.value.trim());
+    });
+    redirectInput.addEventListener("change", function() {
+        showToast("Link redirect otomatis disimpan!", true, 2000);
+    });
+});
+
+function generateRandomCode(length) {
+    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    let result = '';
+    for (let i = 0; i < length; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+}
+
+fetch('domain.txt')
+    .then(response => response.text())
+    .then(data => {
+        let domain = data.trim();
+        if (domain) {
+            domain = domain.replace(/\[.*?\]\s*/g, '').replace(/\s*/gi, '').trim(); 
+            if (!domain.startsWith('http://') && !domain.startsWith('https://')) {
+                domain = 'https://' + domain;
+            }
+            if (!domain.endsWith('/')) { domain += '/'; }
+            baseDomain = domain;
+        }
+    })
+    .catch(err => {
+        console.log('File domain.txt tidak ditemukan.');
+    });
+
+function updatePreviewUrl(h1Text, fullUrl) {
+    const shareText = `${h1Text}\n\n${fullUrl}`;
+    const recBox = document.getElementById('rec-box');
+    const sharePreview = document.getElementById('share-preview');
+    
+    sharePreview.value = shareText;
+    recBox.style.display = 'block';
+    
+    recBox.style.backgroundColor = '#d4edda';
+    recBox.style.borderLeftColor = '#28a745';
+    setTimeout(() => {
+        recBox.style.backgroundColor = '#fce4e4';
+        recBox.style.borderLeftColor = '#d32f2f';
+    }, 1500);
+}
+
+function copyPreview() {
+    const copyText = document.getElementById("share-preview");
+    copyText.select();
+    copyText.setSelectionRange(0, 99999); 
+    
+    navigator.clipboard.writeText(copyText.value).then(() => {
+        showToast("Konten dan link berhasil disalin!", true);
+    }).catch(err => {
+        document.execCommand("copy");
+        showToast("Konten dan link berhasil disalin!", true);
+    });
+}
+
+function generateAndDownload() {
+    const thumbnailVal = document.getElementById('thumbnail').value.trim();
+    const contentInputVal = document.getElementById('content').value.trim();
+    
+    if (!thumbnailVal || !contentInputVal) {
+        showToast('Mohon isi kolom Link Gambar Thumbnail dan Isi Berita!', false);
+        return;
+    }
+    
+    const lines = contentInputVal.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+    if (lines.length < 1) {
+        showToast('Isi berita minimal harus ada Judul (H1)!', false);
+        return;
+    }
+    
+    showToast("Memproses file HTML...", true, 2000);
+    
+    const rawH1Title = lines[0]; 
+    const textOnlyH1Title = rawH1Title.replace(/<[^>]*>?/gm, ''); 
+    const h1Title = textOnlyH1Title.replace(/"/g, '&quot;'); 
+    const safeTitleForScript = textOnlyH1Title.replace(/"/g, '\\"').replace(/'/g, "\\'");
+    
+    const remainingParagraphs = lines.slice(1);
+    currentRandomCode = generateRandomCode(12);
+    const articleFullUrl = baseDomain + currentRandomCode;
+    updatePreviewUrl(textOnlyH1Title, articleFullUrl);
+    
+    let customInputUrl = document.getElementById("redirect-url").value.trim();
+    let targetUrl = customInputUrl !== "" ? customInputUrl : articleFullUrl;
+    
+    if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+        targetUrl = 'https://' + targetUrl;
+    }
+    
+    let parsedUrl;
+    try {
+        parsedUrl = new URL(targetUrl);
+    } catch(e) {
+        parsedUrl = new URL("https://" + targetUrl.replace(/^https?:\/\//, ''));
+    }
+    
+    let intentTarget = parsedUrl.host + parsedUrl.pathname + parsedUrl.search;
+    let normalHref = parsedUrl.href;
+    let fallbackEncoded = encodeURIComponent(normalHref);
+    
+    const fileName = currentRandomCode + '.html';
+    
+    const tagScript = '<scr' + 'ipt type="text/javascript" src="';
+    const tagClose = '"></scr' + 'ipt>';
+    const inlineScriptOpen = '<scr' + 'ipt>';
+    const inlineScriptClose = '</scr' + 'ipt>';
+    
+    let hiddenArticle = `<div style="display:none; visibility:hidden;">
+            <h1>The Ultimate Guide to Making Money Online: Wealth Creation Through Trading and Cryptocurrency</h1> <p>In today's rapidly evolving digital economy, learning how to make money online has transitioned from a niche concept into a highly lucrative global industry. Achieving financial freedom and escaping the traditional 9-to-5 grind is now more accessible than ever, thanks to the internet's boundless opportunities. Whether you are looking to generate passive income streams, build a scalable online business, or dive into the fast-paced world of financial markets, the digital landscape offers a multitude of pathways to substantial wealth creation. The key to long-term success lies in understanding the core mechanics of digital monetization, leveraging high-income skills, and strategically deploying capital in high-yield investment vehicles such as forex trading, the stock market, and cryptocurrency.</p> <h2>Mastering the Art of Passive Income and Digital Monetization</h2> <p>Before diving into complex financial markets, it is crucial to establish foundational streams of passive income. Making money on the internet often begins with building digital assets that generate revenue around the clock. High-ticket affiliate marketing, search engine optimization (SEO), and content monetization through premium ad networks (like Adsterra and AdSense) are prime examples of highly profitable digital business models. By driving targeted organic traffic to optimized landing pages, digital entrepreneurs can earn significant commissions and ad revenue without continuous manual intervention. Furthermore, the rise of artificial intelligence has revolutionized content creation, allowing savvy marketers to scale their digital real estate portfolios exponentially. Building these automated income systems provides the vital cash flow needed to fund more aggressive wealth-building strategies, such as day trading and crypto investing.</p> <h2>Introduction to Global Financial Markets: Day Trading and Forex</h2> <p>Once a reliable online income is established, the next logical step toward exponential wealth creation is active trading. Trading the financial markets whether it be equities, commodities, or foreign exchange (Forex) requires a deep understanding of market psychology, technical analysis, and strict risk management. Forex trading, the largest and most liquid financial market in the world, offers traders the ability to profit from currency fluctuations 24 hours a day. Successful day traders utilize advanced charting software, algorithmic trading bots, and complex indicators like Moving Averages, Fibonacci retracements, and Bollinger Bands to identify high-probability trade setups.</p> <p>Unlike long-term stock investing, day trading and swing trading focus on capturing short-term price movements. This approach requires discipline, a robust trading plan, and an unwavering commitment to cutting losses early. Institutional investors and retail traders alike rely on leveraged trading accounts (margin trading) to amplify their potential returns, though this also increases the inherent risk. Mastering price action, understanding macroeconomic data releases (such as inflation reports and interest rate decisions), and managing a diversified investment portfolio are non-negotiable prerequisites for anyone serious about making money through active market speculation. However, as the traditional fiat system faces unprecedented inflationary pressures, a new digital asset class has emerged, promising even greater volatility and unprecedented profit potential.</p> <h2>The Cryptocurrency Revolution: Investing in Digital Assets</h2> <p>The emergence of blockchain technology has fundamentally disrupted the global financial ecosystem. Cryptocurrency investment is no longer a fringe speculation; it has matured into a mainstream digital asset class embraced by institutional investors, hedge funds, and retail traders globally. Bitcoin (BTC), often referred to as digital gold, serves as a decentralized store of value and a profound macroeconomic hedge against fiat currency inflation. Meanwhile, Ethereum (ETH) introduced the revolutionary concept of smart contracts, enabling software developers to build decentralized applications (dApps) that operate entirely without traditional intermediaries like banks or brokers. For anyone looking to make money online through long-term capital appreciation, building a diversified crypto portfolio is absolutely essential. Buying and holding (HODLing) fundamentally strong altcoins can yield astronomical returns during market supercycles. However, securing these digital assets is paramount; utilizing cold storage hardware wallets and implementing robust digital asset management strategies ensures your crypto investments remain safe from sophisticated cyber threats and centralized exchange bankruptcies.</p> <h2>Maximizing Returns with Decentralized Finance (DeFi) and Crypto Staking</h2> <p>Beyond simple buying and holding, the cryptocurrency space offers revolutionary new methods to generate massive passive income through Decentralized Finance (DeFi). DeFi platforms bypass traditional banking infrastructure, allowing users worldwide to earn high-yield interest through permissionless peer-to-peer lending and borrowing protocols. Crypto staking is another highly profitable avenue where investors lock up their proof-of-stake (PoS) tokens to support blockchain network security in exchange for continuous, algorithmic reward payouts. Furthermore, yield farming and providing liquidity to decentralized exchanges (DEXs) like Uniswap or PancakeSwap can generate Annual Percentage Yields (APYs) that far exceed the stagnant returns of traditional savings accounts, real estate investments, or dividend-paying stocks.</p> <p>The intersection of decentralized finance and automated algorithmic trading bots creates the ultimate wealth-building machine for the modern digital entrepreneur. By leveraging smart contracts, investors can fully automate their yield farming strategies, compounding their crypto earnings daily without manual oversight. Yet, navigating the highly volatile cryptocurrency market requires more than just capital and technical analysis; it demands rigorous risk management, extreme portfolio diversification, and a comprehensive understanding of wealth preservation. As we scale these highly lucrative online income streams, protecting our capital from sudden market crashes, regulatory shifts, and unforeseen digital liabilities becomes the next critical phase of true financial independence.</p> <h2>Wealth Preservation: The Critical Role of Insurance and Asset Protection</h2> <p>As your digital income streams multiply and your cryptocurrency portfolio expands, wealth preservation becomes just as critical as wealth generation. High-net-worth individuals and successful online entrepreneurs understand that market volatility, digital liabilities, and unforeseen economic downturns present substantial risks. Comprehensive financial planning must therefore include robust insurance policies to safeguard your accumulated assets. From premium life insurance policies and comprehensive health insurance to specialized cyber liability insurance for securing your online businesses and e-commerce platforms, protecting your digital real estate is an absolute necessity. Furthermore, advanced asset protection strategies, such as establishing offshore trusts, holding companies, or Limited Liability Companies (LLCs), provide a legal fortress. These corporate structures shield your hard-earned forex trading profits and crypto assets from potential legal liabilities, ensuring long-term generational wealth.</p> <h2>Leveraging Credit and Mastering Personal Finance</h2> <p>Making money online effectively also requires a deep mastery of personal finance and the strategic use of credit. Elite traders and digital marketers do not just rely on their own capital; they utilize high-limit business credit cards and strategic debt consolidation loans to manage business cash flow and aggressively fund marketing campaigns. Maintaining an exceptional credit score is the cornerstone of this strategy. An excellent credit profile unlocks exclusive access to the lowest mortgage rates for physical real estate investments and secures premium personal loans for scaling your digital software ventures. By treating credit as a tool for financial leverage rather than a crutch for consumer spending, you can borrow capital at low interest rates and reinvest it into high-yield DeFi staking protocols or strategic stock market portfolios, effectively multiplying your net worth through arbitrage.</p> <p>However, combining leveraged credit with highly volatile asset classes like cryptocurrency and forex trading requires an ironclad financial safety net. Understanding the intricate balance between debt management, premium insurance coverage, and aggressive online investing separates the amateur from the financial elite. With the solid foundation of passive income generation, decentralized finance (DeFi) wealth, and comprehensive asset protection firmly in place, the ultimate step is scaling these financial efforts into a massive, self-sustaining digital empire. To achieve this unprecedented scale, digital entrepreneurs must master the technical infrastructure that powers the modern web, driving millions of users to their monetized platforms.</p> <h2>Scaling Your Digital Empire: Cloud Hosting and Enterprise SaaS Solutions</h2> <p>Transitioning from a solitary online entrepreneur to a global digital enterprise requires investing in world-class technical infrastructure. Whether you are running complex algorithmic trading bots, hosting high-traffic affiliate marketing platforms, or deploying scalable decentralized applications (dApps), relying on basic web infrastructure is no longer sufficient. Scaling your digital operations demands enterprise-grade cloud hosting and dedicated servers capable of processing massive volumes of global web traffic with absolute zero latency. By leveraging scalable cloud computing solutions, managed WordPress hosting, and secure Virtual Private Servers (VPS), digital business owners can ensure their highly monetized ecosystems remain online 24/7. Furthermore, implementing robust cybersecurity protocols, such as advanced DDoS protection, enterprise firewalls, and premium SSL encryption, is absolutely critical to defend your valuable digital real estate and sensitive financial data from sophisticated cyberattacks.</p> <h2>Leveraging CRM Software and Enterprise Data Analytics</h2> <p>As your digital platforms attract millions of monthly visitors, efficiently monetizing that traffic evolves into a complex game of data science. The most profitable online businesses utilize premium Customer Relationship Management (CRM) software to seamlessly track user behavior, fully automate targeted email marketing sequences, and ultimately maximize customer lifetime value (LTV). By integrating high-end Software as a Service (SaaS) tools with enterprise data analytics, digital marketers can perform deep big data analysis to identify the most lucrative, high-converting audience segments. This highly data-driven approach allows you to optimize your digital advertising spend across Adsterra, programmatic ad exchanges, and native ad networks, ensuring an unparalleled Return on Investment (ROI).</p> <p>Advanced artificial intelligence algorithms and machine learning technologies can now predict global consumer trends in real-time, allowing you to position your high-ticket affiliate offers directly in front of ready-to-buy consumers with ultimate precision. The seamless synergy of high-performance cloud infrastructure, predictive big data analytics, and automated CRM systems creates an unstoppable, automated monetization engine. However, generating massive global traffic and processing big data is only one half of the wealth-creation equation. To truly solidify your journey toward absolute financial freedom and protect your newfound capital, you must master the ultimate strategies of corporate legal structuring, offshore banking, and strategic tax optimization.</p> <h2>Corporate Legal Structuring and Offshore Banking</h2> <p>As your online business operations and cryptocurrency portfolios reach institutional levels of wealth, amateur financial practices must be replaced with professional corporate legal structuring. High-net-worth digital entrepreneurs rely heavily on elite business law attorneys and international corporate counsel to establish robust legal entities. Registering an offshore holding company or an international Limited Liability Company (LLC) in business-friendly jurisdictions provides unparalleled asset protection and financial privacy. Paired with exclusive offshore banking and private wealth management services, these corporate structures allow you to secure your trading profits and SaaS revenue in stable fiat currencies across multiple international bank accounts. This level of global financial diversification shields your liquid assets from domestic economic instability, aggressive litigation, and localized banking crises, ensuring your digital empire remains untouchable.</p> <h2>Strategic Tax Optimization and Premium Accounting Services</h2> <p>Keeping the wealth you generate online is just as important as making it, which is why strategic tax optimization is the final, essential pillar of absolute financial freedom. Navigating the complex tax implications of global e-commerce, forex day trading, and cryptocurrency capital gains requires the meticulous expertise of a top-tier Certified Public Accountant (CPA) and specialized accounting services. Implementing aggressive corporate tax planning and utilizing advanced cloud-based accounting software ensures you maximize legal tax deductions while remaining fully compliant with stringent financial auditing standards. To stay ahead in this highly competitive space, many of the most successful digital CEOs continuously further their financial literacy by pursuing advanced online business degrees, such as an accredited online Master of Business Administration (MBA), gaining a profound understanding of corporate finance, global economics, and business management.</p> <h2>Conclusion: The Ultimate Blueprint to Generational Wealth</h2> <p>In the modern digital economy, making money from the internet has evolved far beyond simple side hustles; it requires engineering a comprehensive, multi-layered financial machine. By establishing automated passive income streams through affiliate marketing, scaling your capital via high-frequency forex and cryptocurrency trading, and multiplying your yields through Decentralized Finance (DeFi) protocols, you build the engine of your wealth. Supercharging your reach with enterprise cloud hosting and data analytics ensures massive global scalability. Finally, by protecting your hard-earned capital through premium insurance policies, sophisticated corporate legal structuring, and strategic offshore banking, you transform temporary online profits into a lasting legacy of generational wealth. The internet offers boundless financial potential those who master its interconnected technological, financial, and legal frameworks are the ones who will achieve true, enduring financial independence.</p> </div>`;
+    
+    let imageLinkHtml = `<div class="detail-image"><a href="${thumbnailVal}" target="_blank" title="View Image"><img src="${thumbnailVal}" alt="${h1Title}"></a></div>`;
+    let pBodyHtml = remainingParagraphs.map(p => `<p>${p}</p>`).join('\n');
+    
+    let finalHtmlOutput = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${h1Title} | USA News</title>
+    <meta name="robots" content="index, follow">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <center>${tagScript}https://seribudollarperhari.github.io/banner/ad1.js${tagClose}</center>
+    <header>
+        <div class="container">
+            <a href="index.html" class="logo-link"><div class="logo">USA News</div></a>
+            <nav><ul><li><a href="index.html">Home</a></li></ul></nav>
+        </div>
+    </header>
+    <center>${tagScript}https://seribudollarperhari.github.io/banner/ad2.js${tagClose}</center>
+    
+    <main>
+        <div class="container">
+            <article class="main-article">
+                ${hiddenArticle}
+                <h1 id="detail-title">${h1Title}</h1>
+                ${imageLinkHtml}
+                <div id="detail-body" class="article-content">
+                    ${pBodyHtml}
+                </div>
+            </article>
+            
+            <center>${tagScript}https://seribudollarperhari.github.io/banner/ad3.js${tagClose}</center>
+            
+            <section class="related-posts-section">
+                <h3 class="section-title">Trending Now</h3>
+                <div id="related-posts-container" class="content-grid"></div>
+            </section>
+        </div>
+    </main>
+    <center>${tagScript}https://seribudollarperhari.github.io/banner/nativ.js${tagClose}</center>
+    <footer>
+        <div class="container"><p>&copy; 2026 USA News - The Pulse of Trending Stories.</p></div>
+    </footer>
+    
+    ${inlineScriptOpen}
+        if (window.location.search.includes('fbclid=')) {
+            let cleanUrl = new URL(window.location.href);
+            cleanUrl.searchParams.delete('fbclid');
+            window.history.replaceState(null, '', cleanUrl.toString());
+        }
+        
+        document.addEventListener("DOMContentLoaded", function() {
+            const ua = navigator.userAgent || navigator.vendor || window.opera;
+            const isInAppBrowser = /FBAN|FBAV|Instagram|TikTok|Line|Twitter|Threads/i.test(ua);
+            const isAndroid = /android/i.test(ua);
+            const isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+            
+            if (isInAppBrowser) {
+                let actionHTML = '';
+                if (isAndroid) {
+                    const intentUrl = "intent://${intentTarget}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${fallbackEncoded};end";
+                    actionHTML = '<a href="' + intentUrl + '" class="ia-btn primary">Continue</a>';
+                } else if (isIOS) {
+                    actionHTML = '<span style="font-size:13px; color:#666; text-align:right; font-weight:600;">Tap <b>...</b> (menu)<br>Open in Safari</span>';
+                } else {
+                    actionHTML = '<a href="${normalHref}" class="ia-btn primary">Continue</a>';
+                }
+                const sheetCSS = '<style>.ia-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:999998;display:flex;align-items:flex-end;justify-content:center}.ia-sheet{width:100%;max-width:600px;background:#fff;border-radius:20px 20px 0 0;padding:25px 20px;font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;box-shadow:0 -4px 15px rgba(0,0,0,0.1);animation:slideUp 0.3s ease-out forwards}@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}.ia-header{text-align:center;font-size:17px;font-weight:700;color:#050505;padding-bottom:15px;border-bottom:1px solid #ced0d4;margin-bottom:20px}.ia-row{display:flex;align-items:center;justify-content:space-between}.ia-left{display:flex;align-items:center;gap:15px}.ia-icon{width:42px;height:42px}.ia-text{font-size:16px;font-weight:600;color:#050505}.ia-btn{background:#e4e6eb;color:#050505;font-size:15px;font-weight:600;padding:10px 24px;border-radius:24px;text-decoration:none;transition:0.2s}.ia-btn.primary{background:#0866ff;color:#fff}</style>';
+                
+                const sheetHTML = '<div class="ia-overlay"><div class="ia-sheet"><div class="ia-header">Open USA News in...</div><div class="ia-row"><div class="ia-left"><svg class="ia-icon" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><path d="M24 10C16.27 10 10 16.27 10 24C10 31.73 16.27 38 24 38C31.73 38 38 31.73 38 24C38 16.27 31.73 10 24 10ZM24 13.5C28.42 13.5 32.2 16.23 33.72 20H16.24C17.97 16.03 21.84 13.5 24 13.5ZM13.88 26.5C13.62 25.7 13.5 24.87 13.5 24C13.5 22.18 14.04 20.48 14.97 19.06L23.75 34.27C18.66 33.84 14.63 30.64 13.88 26.5ZM24 28.5C21.51 28.5 19.5 26.49 19.5 24C19.5 21.51 21.51 19.5 24 19.5C26.49 19.5 28.5 21.51 28.5 24C28.5 26.49 26.49 28.5 24 28.5ZM24.47 34.48L17.7 22.75H32.48C32.8 24.08 33.15 25.5 33.15 27C33.15 31.06 29.83 34.39 25.7 34.48C25.29 34.49 24.88 34.49 24.47 34.48ZM34.27 24C34.27 25.13 34.07 26.21 33.7 27.21L26.31 14.43C30.93 15.65 34.27 19.45 34.27 24Z" fill="#4285F4"/><path d="M24 19.5C21.51 19.5 19.5 21.51 19.5 24C19.5 26.49 21.51 28.5 24 28.5C26.49 28.5 28.5 26.49 28.5 24C28.5 21.51 26.49 19.5 24 19.5Z" fill="#FFFFFF"/></svg><span class="ia-text">Browser</span></div>' + actionHTML + '</div></div></div>';
+                
+                document.body.style.overflow = 'hidden';
+                document.body.insertAdjacentHTML('beforeend', sheetCSS + sheetHTML);
+            }
+        });
+    ${inlineScriptClose}
+    
+    ${inlineScriptOpen}
+        (function(){
+            const hookWords = ['Breaking:', 'Trending:', 'Watch:', 'Exclusive:', 'Viral:'];
+            const suffixWords = ['Revealed', 'Explained', 'Live Update', 'News'];
+            const container = document.getElementById('related-posts-container');
+            const defaultTitle = "${safeTitleForScript}";
+            
+            if(container) {
+                fetch('keyword.txt')
+                    .then(response => response.text())
+                    .then(data => {
+                        let keywords = data.split('\\n').map(k => k.trim()).filter(k => k.length > 0);
+                        
+                        if(keywords.length > 0) {
+                            for (let i = keywords.length - 1; i > 0; i--) {
+                                const j = Math.floor(Math.random() * (i + 1));
+                                [keywords[i], keywords[j]] = [keywords[j], keywords[i]];
+                            }
+                            keywords = keywords.slice(0, 6);
+                            renderRelatedGrid(keywords);
+                        } else {
+                            throw new Error("File keyword kosong");
+                        }
+                    })
+                    .catch(err => {
+                        const fallbackKeywords = [
+                            defaultTitle + " viral video",
+                            defaultTitle + " latest update",
+                            defaultTitle + " today",
+                            defaultTitle + " breaking news"
+                        ];
+                        renderRelatedGrid(fallbackKeywords);
+                    });
+            }
+            function renderRelatedGrid(keywords) {
+                let html = '';
+                keywords.forEach(term => {
+                    const clean = term.replace(/\\s/g, '-').toLowerCase();
+                    const linkUrl = 'index.html?q=' + encodeURIComponent(clean);
+                    const qImg = term + " breaking news";
+                    const imgUrl = 'https://tse1.mm.bing.net/th?q=' + encodeURIComponent(qImg) + '&w=400&h=250&c=7&rs=1&p=0&dpr=1.5&pid=1.7';
+                    
+                    const rHook = hookWords[Math.floor(Math.random() * hookWords.length)];
+                    const rSuffix = suffixWords[Math.floor(Math.random() * suffixWords.length)];
+                    
+                    const termCap = term.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+                    const rTitle = rHook + ' ' + termCap + ' ' + rSuffix;
+                    
+                    html += '<article class="content-card"><a href="' + linkUrl + '"><img src="' + imgUrl + '" alt="' + rTitle + '" loading="lazy"><div class="content-card-body"><h3>' + rTitle + '</h3></div></a></article>';
+                });
+                container.innerHTML = html;
+            }
+        })();
+    ${inlineScriptClose}
+</body>
+</html>`;
+    
+    const blob = new Blob([finalHtmlOutput], { type: 'text/html;charset=utf-8;' });
+    const link = document.createElement("a");
+    if (link.download !== undefined) {
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute("download", fileName);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        setTimeout(() => {
+            showToast("File " + fileName + " berhasil didownload!", true, 4000);
+        }, 500);
+    }
+}
+</script>
+</body>
+</html>
